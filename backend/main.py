@@ -5,6 +5,7 @@ import requests
 from cart import (
     get_cart,
     add_to_cart,
+    update_cart_quantity,
     remove_from_cart,
     clear_cart
 )
@@ -118,6 +119,38 @@ def cart_remove(product_id: int):
             detail=str(error)
         )
 
+
+@app.patch("/api/cart/{product_id}")
+def cart_update(product_id: int, quantity: int):
+    try:
+        return update_cart_quantity(
+            product_id=product_id,
+            quantity=quantity
+        )
+
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
+        )
+
+    except requests.RequestException as error:
+        raise HTTPException(
+            status_code=502,
+            detail=f"EKT API error: {str(error)}"
+        )
+
+
+@app.delete("/api/cart/{product_id}")
+def cart_remove(product_id: int):
+    try:
+        return remove_from_cart(product_id)
+
+    except ValueError as error:
+        raise HTTPException(
+            status_code=404,
+            detail=str(error)
+        )
 
 @app.delete("/api/cart")
 def cart_clear():

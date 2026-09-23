@@ -70,6 +70,40 @@ def remove_from_cart(product_id: int):
     return get_cart()
 
 
+def update_cart_quantity(product_id: int, quantity: int):
+    if product_id not in cart:
+        raise ValueError("Товар отсутствует в корзине")
+
+    if quantity < 0:
+        raise ValueError("Количество не может быть отрицательным")
+
+    # 0 = удалить товар
+    if quantity == 0:
+        del cart[product_id]
+        return get_cart()
+
+    product = get_product_detail(product_id)
+
+    available_quantity = product.get("quantity", 0)
+
+    if quantity > available_quantity:
+        raise ValueError(
+            f"Недостаточно товара. Доступно: {available_quantity}"
+        )
+
+    cart[product_id]["quantity"] = quantity
+
+    return get_cart()
+
+def remove_from_cart(product_id: int):
+    if product_id not in cart:
+        raise ValueError("Товар отсутствует в корзине")
+
+    del cart[product_id]
+
+    return get_cart()
+
+
 def clear_cart():
     cart.clear()
 
