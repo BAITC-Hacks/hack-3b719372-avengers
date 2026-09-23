@@ -1,5 +1,10 @@
 node_modules/
 dist/
+dist-widget/
 .env
 .env.local
 .DS_Store
+.venv/
+venv/
+__pycache__/
+*.pyc

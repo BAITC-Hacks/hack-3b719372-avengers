@@ -6,6 +6,10 @@ import './improvements.css';
 import './store.css';
 import { apiUrl, requestChat, validProduct } from './api';
 
+import { searchCatalog } from './catalog';
+import ProductDetails from './widget/ProductDetails';
+import { addServerCart, readServerCart } from './widget/cart';
+
 const cartKey = `ekt-cart:${apiUrl || 'demo'}`;
 function readCart() {
   try {
@@ -27,15 +31,79 @@ const demoProducts = [
   { id: '125', name: 'Дифференциальный автомат ABB 16A', sku: 'DS201 C16', price: 12400, available: false, image: '🛡️' },
 ];
 
-const money = (value) => `${value.toLocaleString('ru-RU')} ₸`;
+const money = (value) => value === null ? 'Цена уточняется' : `${value.toLocaleString('ru-RU')} ₸`;
+
+function ProductImage({ product }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [product.image]);
+  if (typeof product.image === 'string' && /^https?:\/\//.test(product.image) && !failed) {
+    return <img src={product.image} alt={product.name} loading="lazy" onError={() => setFailed(true)} />;
+  }
+  return <Package size={38} aria-label="Фото товара отсутствует" />;
+}
 
 function App() {
   const [messages, setMessages] = useState([{ role: 'assistant', text: 'Здравствуйте! Я помогу подобрать электротехнические товары. Что вы ищете?' }]);
   const [input, setInput] = useState('');
   const [products, setProducts] = useState([]);
-  const [cart, setCart] = useState(readCart);
+  const [query, setQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [searched, setSearched] = useState(false);
+  const searchBusy = useRef(false);
+  const handleSearch = async event => {
+    event.preventDefault();
+    if (!query.trim() || searchBusy.current || busy.current) return;
+    searchBusy.current = true;
+    setSearching(true);
+    setSearchError('');
+    setProducts([]);
+    setSearched(true);
+    try {
+      const found = apiUrl ? await searchCatalog(apiUrl, query) : demoProducts.filter(product => (product.name + ' ' + product.sku).toLowerCase().includes(query.trim().toLowerCase()));
+      setProducts(found);
+    } catch (failure) { setSearchError(failure.message); }
+    finally { searchBusy.current = false; setSearching(false); }
+  };
+  const [cart, setCart] = useState(() => apiUrl ? [] : readCart());
   const [loading, setLoading] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
+  const [cartLoading, setCartLoading] = useState(false);
+  const [cartError, setCartError] = useState('');
+  const [addingToCart, setAddingToCart] = useState(false);
+  const addingGuard = useRef(false);
+  const cartRequest = useRef(0);
+  const refreshCart = async () => {
+    if (!apiUrl) return;
+    const request = ++cartRequest.current;
+    setCartLoading(true);
+    setCartError('');
+    try {
+      const items = await readServerCart(apiUrl);
+      if (request === cartRequest.current) setCart(items);
+    } catch { if (request === cartRequest.current) setCartError('Не удалось обновить корзину. Отображаемые данные могут быть устаревшими.'); }
+    finally { if (request === cartRequest.current) setCartLoading(false); }
+  };
+  useEffect(() => {
+    refreshCart();
+    const updated = event => { if (event.detail?.base === apiUrl) refreshCart(); };
+    window.addEventListener('ekt-cart-updated', updated);
+    return () => { window.removeEventListener('ekt-cart-updated', updated); cartRequest.current++; };
+  }, []);
+  useEffect(() => { if (cartOpen) refreshCart(); }, [cartOpen]);
+  const cartDialog = useRef(null);
+  const [sort, setSort] = useState('default');
+  const [availableOnly, setAvailableOnly] = useState(false);
+  const visibleProducts = products.filter(product => !availableOnly || product.available)
+    .sort((a, b) => a.price === null ? (b.price === null ? 0 : 1) : b.price === null ? -1 : sort === 'ascending' ? a.price - b.price : sort === 'descending' ? b.price - a.price : 0);
+  useEffect(() => {
+    if (cartOpen) cartDialog.current?.showModal();
+    else cartDialog.current?.close();
+    if (!cartOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previous; };
+  }, [cartOpen]);
 
   const [error, setError] = useState('');
   const [storageError, setStorageError] = useState('');
@@ -48,6 +116,7 @@ function App() {
   const [notice, setNotice] = useState('');
 
   useEffect(() => {
+    if (apiUrl) return;
     try { localStorage.setItem(cartKey, JSON.stringify(cart)); setStorageError(''); }
     catch { setStorageError('Браузер не разрешил сохранить корзину. Она доступна до обновления страницы.'); }
   }, [cart]);
@@ -67,7 +136,7 @@ function App() {
   const sendMessage = async (event, retry = false) => {
     event?.preventDefault();
     const message = retry ? lastRequest : input.trim();
-    if (!message || busy.current) return;
+    if (!message || busy.current || searchBusy.current) return;
     busy.current = true;
     if (!retry) {
       setInput('');
@@ -75,6 +144,8 @@ function App() {
     }
     setLastRequest(message);
     setError('');
+    setSearchError('');
+    setSearched(false);
     setLoading(true);
     try {
       let data;
@@ -89,8 +160,20 @@ function App() {
     finally { busy.current = false; setLoading(false); }
   };
 
-  const addToCart = (product) => {
-    if (!product.available) return;
+  const addToCart = async (product) => {
+    if (!product.available || product.price === null) return;
+    if (apiUrl) {
+      if (addingGuard.current) return;
+      addingGuard.current = true;
+      setAddingToCart(true);
+      try {
+        await addServerCart(apiUrl, product.id, 1);
+        setPendingProduct(null);
+        setNotice('Товар добавлен в серверную корзину.');
+      } catch (failure) { setNotice(failure.message); }
+      finally { addingGuard.current = false; setAddingToCart(false); }
+      return;
+    }
     setPendingProduct(null);
     setNotice(`Добавлено: ${product.name}`);
     setCart((items) => {
@@ -124,15 +207,21 @@ function App() {
     <div className="assistant-title"><h2 className="section-title">Ваш консультант. <span>Сложный выбор — простой разговор.</span></h2></div>
     <main className="workspace" id="assistant">
       <section className="chat-panel">
-        <div className="panel-heading"><div className="bot-avatar"><Bot size={21} /></div><div><h2>AI-консультант</h2><p><i /> {apiUrl ? 'Подключён сервер' : 'Деморежим · тестовые товары'}</p></div></div>
+        <div className="panel-heading"><div className="bot-avatar"><Bot size={21} /></div><div><h2>AI-консультант</h2><p><i /> {apiUrl ? 'Адрес сервера настроен' : 'Деморежим · тестовые товары'}</p></div></div>
         <div className="messages" ref={messageList} role="log" aria-label="История сообщений" aria-live="polite">{messages.map((message, index) => <div className={`message-row ${message.role}`} key={index}><div className="message-avatar">{message.role === 'assistant' ? <Bot size={16} /> : 'Вы'}</div><div className="bubble">{message.text}</div></div>)}{loading && <div className="message-row assistant"><div className="message-avatar"><Bot size={16} /></div><div className="bubble typing"><span /><span /><span /></div></div>}{products.length > 0 && <div className="result-note">Результаты поиска</div>}</div>
         {error && <div className="feedback" role="alert">{error}<button disabled={loading} onClick={(event) => sendMessage(event, true)}>Повторить</button></div>}
-        <form className="composer" onSubmit={sendMessage}><input aria-label="Сообщение консультанту" maxLength={4000} value={input} onChange={(event) => setInput(event.target.value)} placeholder="Например: Найди автомат на 16 А" /><button aria-label="Отправить" disabled={loading || !input.trim()} type="submit"><Send size={18} /></button></form>
+        <form className="composer" onSubmit={sendMessage}><input aria-label="Сообщение консультанту" maxLength={4000} value={input} onChange={(event) => setInput(event.target.value)} placeholder="Например: Найди автомат на 16 А" /><button aria-label="Отправить" disabled={loading || searching || !input.trim()} type="submit"><Send size={18} /></button></form>
         <div className="suggestions"><button onClick={() => setInput('Найди автомат на 16 А')}>Автомат на 16 А</button><button onClick={() => setInput('Подбери аналог дешевле')}>Аналог дешевле</button></div>
       </section>
-      <section className="catalog-panel"><div className="catalog-heading"><div><p className="eyebrow">КАТАЛОГ</p><h2>{products.length ? 'Подходящие товары' : 'Рекомендации появятся здесь'}</h2></div><Package size={25} /></div>{products.length ? <div className="product-grid">{products.map((product) => <article className="product-card" key={product.id}><div className="product-image">{product.image && !/^https?:/.test(product.image) ? product.image : <Package size={40} />}</div><div className="product-info"><span className={product.available ? 'stock' : 'stock unavailable'}>{product.available ? 'В наличии' : 'Нет в наличии'}</span><h3>{product.name}</h3><p className="sku">Арт. {product.sku}</p><div className="product-footer"><strong>{money(product.price)}</strong><button disabled={!product.available} onClick={() => setPendingProduct(product)}><Plus size={16} /> В корзину</button></div></div></article>)}</div> : <div className="empty-catalog"><div className="empty-icon"><Sparkles size={24} /></div><h3>Найдём нужный товар</h3><p>Опишите задачу в чате слева — AI подберёт товары из каталога и покажет цены.</p></div>}</section>
+      <section className="catalog-panel"><div className="catalog-heading"><div><p className="eyebrow">КАТАЛОГ</p><h2>{products.length ? 'Подходящие товары' : 'Рекомендации появятся здесь'}</h2></div><Package size={25} /></div>
+      <form className="catalog-search" onSubmit={handleSearch}><label htmlFor="catalog-query">Поиск по названию или артикулу</label><div><input id="catalog-query" value={query} maxLength={300} onChange={event => setQuery(event.target.value)} placeholder="Например: 16А или EZ9F34216" /><button disabled={!query.trim() || searching || loading}>{searching ? 'Ищем…' : 'Найти'}</button></div><small>{apiUrl ? 'Поиск в каталоге через сервер команды' : 'Демопоиск по трём тестовым товарам'}</small></form>
+      {searchError && <p className="feedback" role="alert">{searchError} Нажмите «Найти», чтобы повторить.</p>}
+      {searching && <p role="status">Ищем товары…</p>}
+      {products.length > 0 && <div className="catalog-controls"><label><input type="checkbox" checked={availableOnly} onChange={event => setAvailableOnly(event.target.checked)} /> Только в наличии</label><label><span className="sr-only">Сортировка товаров</span><select value={sort} onChange={event => setSort(event.target.value)}><option value="default">По рекомендации</option><option value="ascending">Сначала дешевле</option><option value="descending">Сначала дороже</option></select></label><small role="status">Показано: {visibleProducts.length} из {products.length}</small></div>}
+      {products.length && !visibleProducts.length ? <p className="filter-empty">Нет товаров в наличии. <button onClick={() => setAvailableOnly(false)}>Показать все</button></p> : null}
+      {products.length ? <div className="product-grid">{visibleProducts.map((product) => <article className="product-card" key={product.id}><div className="product-image"><ProductImage product={product} /></div><div className="product-info"><span className={product.available ? 'stock' : 'stock unavailable'}>{product.available === null ? 'Наличие уточняется' : product.available ? (product.stock != null ? `В наличии: ${product.stock} шт.` : 'В наличии') : 'Нет в наличии'}</span><h3>{product.name}</h3>{product.sku && <p className="sku">Арт. {product.sku}</p>}<ProductDetails product={product} /><div className="product-footer"><strong>{money(product.price)}</strong><button disabled={!product.available || product.price === null} onClick={() => setPendingProduct(product)}><Plus size={16} /> В корзину</button></div></div></article>)}</div> : <div className="empty-catalog"><div className="empty-icon"><Sparkles size={24} /></div><h3>{searching ? 'Поиск в каталоге' : searchError ? 'Поиск не завершён' : searched ? 'Ничего не найдено' : 'Найдём нужный товар'}</h3><p>{searched ? 'Попробуйте другой артикул или более короткое название.' : 'Введите название или артикул в поиске выше.'}</p></div>}</section>
     </main>
-    {cartOpen && <div className="drawer-backdrop" onClick={() => setCartOpen(false)}><aside className="cart-drawer" onClick={(event) => event.stopPropagation()}><div className="drawer-heading"><div><p className="eyebrow">ВАШ ЗАКАЗ</p><h2>Корзина <span>{cartCount}</span></h2></div><button aria-label="Закрыть корзину" className="icon-button" onClick={() => setCartOpen(false)}><X size={20} /></button></div>{cart.length ? <div><div className="cart-items">{cart.map((item) => <div className="cart-item" key={item.id}><div className="cart-item-icon">{item.image}</div><div className="cart-item-main"><h3>{item.name}</h3><strong>{money(item.price)}</strong><div className="quantity"><button aria-label="Уменьшить количество" onClick={() => changeQuantity(item.id, -1)}>{item.quantity === 1 ? <Trash2 size={14} /> : <Minus size={14} />}</button><span>{item.quantity}</span><button aria-label="Увеличить количество" onClick={() => changeQuantity(item.id, 1)}><Plus size={14} /></button></div></div><button aria-label="Удалить товар" className="remove" onClick={() => removeFromCart(item.id)}><Trash2 size={16} /></button></div>)}</div><div className="cart-total"><span>Итого</span><strong>{money(total)}</strong></div><p className="checkout-note">Корзина сохранена в этом браузере. Оформление заказа станет доступно после подключения сервиса заказов.</p><button className="checkout" onClick={() => setCartOpen(false)}>Продолжить подбор</button></div> : <div className="empty-cart"><ShoppingCart size={32} /><p>Корзина пока пуста</p><span>Добавьте товар из результатов поиска</span></div>}</aside></div>}
+    <dialog ref={cartDialog} className="cart-modal" aria-labelledby="cart-title" onCancel={() => setCartOpen(false)} onClose={() => setCartOpen(false)} onClick={event => { if (event.target === event.currentTarget) setCartOpen(false); }}><aside className="cart-drawer"><div className="drawer-heading"><div><p className="eyebrow">ВАШ ЗАКАЗ</p><h2 id="cart-title">Корзина <span>{cartCount}</span></h2></div><button aria-label="Закрыть корзину" className="icon-button" onClick={() => setCartOpen(false)}><X size={20} /></button></div>{cartLoading && <p role="status">Обновляем корзину…</p>}{cartError && <p role="alert">{cartError} <button onClick={refreshCart}>Повторить</button></p>}{apiUrl && <p className="checkout-note">Общая серверная демо-корзина. Изменение количества и удаление здесь пока недоступны.</p>}{cart.length ? <div><div className="cart-items">{cart.map((item) => <div className="cart-item" key={item.id}><div className="cart-item-icon"><ProductImage product={item} /></div><div className="cart-item-main"><h3>{item.name}</h3><strong>{money(item.price)}</strong><div className="quantity"><button disabled={!!apiUrl} aria-label="Уменьшить количество" onClick={() => changeQuantity(item.id, -1)}>{item.quantity === 1 ? <Trash2 size={14} /> : <Minus size={14} />}</button><span>{item.quantity}</span><button disabled={!!apiUrl} aria-label="Увеличить количество" onClick={() => changeQuantity(item.id, 1)}><Plus size={14} /></button></div></div><button disabled={!!apiUrl} aria-label="Удалить товар" className="remove" onClick={() => removeFromCart(item.id)}><Trash2 size={16} /></button></div>)}</div><div className="cart-total"><span>Итого</span><strong>{money(total)}</strong></div><p className="checkout-note">{apiUrl ? 'Содержимое получено из backend. Оформление заказа пока недоступно.' : 'Корзина сохранена в этом браузере.'}</p><button className="checkout" onClick={() => setCartOpen(false)}>Продолжить подбор</button></div> : <div className="empty-cart"><ShoppingCart size={32} /><p>Корзина пока пуста</p><span>Добавьте товар из результатов поиска</span></div>}</aside></dialog>
     {storageError && <p className="feedback" role="alert">{storageError}</p>}
     <p className="notice" role="status">{notice}</p>
     <dialog ref={confirmDialog} className="confirm-dialog" onCancel={() => setPendingProduct(null)} onClose={() => setPendingProduct(null)} aria-labelledby="confirm-title">
@@ -141,10 +230,12 @@ function App() {
       <strong>{pendingProduct ? money(pendingProduct.price) : ''} · 1 шт.</strong>
       <div className="confirm-actions">
         <button autoFocus onClick={() => setPendingProduct(null)}>Отмена</button>
-        <button onClick={() => pendingProduct && addToCart(pendingProduct)}>Подтвердить добавление</button>
+        <button disabled={addingToCart} onClick={() => pendingProduct && addToCart(pendingProduct)}>{addingToCart ? 'Добавляем…' : 'Подтвердить добавление'}</button>
       </div>
     </dialog>
   </div>;
 }
 
 createRoot(document.getElementById('root')).render(<App />);
+import { mountWidget } from './widget/entry';
+mountWidget({ apiBase: apiUrl });
