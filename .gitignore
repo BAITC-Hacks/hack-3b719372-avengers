@@ -1,4 +1,5 @@
 # Python
+.venv/
 venv/
 **/venv/
 __pycache__/
@@ -7,6 +8,7 @@ __pycache__/
 # Secrets
 .env
 **/.env
+ai/.env
 
 # VS Code
 .vscode/
