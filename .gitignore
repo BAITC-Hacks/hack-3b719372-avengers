@@ -1,1 +1,12 @@
+# Python
+venv/
+**/venv/
+__pycache__/
+*.pyc
+
+# Secrets
 .env
+**/.env
+
+# VS Code
+.vscode/
