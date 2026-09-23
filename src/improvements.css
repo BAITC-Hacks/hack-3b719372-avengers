@@ -1,0 +1,19 @@
+.chat-panel,.catalog-panel{min-width:0}
+.messages{height:470px;min-height:0;overflow-y:auto}
+.bubble{overflow-wrap:anywhere;white-space:pre-wrap}
+.composer input{min-width:0}
+button:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible,input:focus-visible{outline:2px solid #aaa7ff;outline-offset:3px}
+.feedback{margin:12px 22px;padding:12px;border:1px solid #bb6570;border-radius:10px;color:#ffc5ca;font-size:13px}
+.feedback button{display:block;margin-top:8px;padding:8px;border-radius:6px;cursor:pointer}
+.notice{max-width:1100px;margin:0 auto;padding:0 22px 20px;color:#79dfb8;font-size:13px}
+.cart-drawer{overflow-y:auto}
+.checkout-note{font-size:12px;color:#a6afc2;line-height:1.6}
+.confirm-dialog{width:min(440px,calc(100% - 32px));padding:24px;background:#202638;color:#eef2ff;border:1px solid #62608a;border-radius:16px}
+.confirm-dialog::backdrop{background:#060810bb}
+.confirm-dialog h2{font-size:20px;margin-top:0}
+.confirm-dialog p{line-height:1.5}
+.confirm-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:24px}
+.confirm-actions button{padding:12px;border:1px solid #7772e8;background:#30364c;color:white;border-radius:8px;cursor:pointer}
+.confirm-actions button:last-child{background:#5f5be8}
+@media(max-width:520px){.messages{height:350px}.catalog-heading h2{font-size:18px}.product-footer{flex-wrap:wrap}}
