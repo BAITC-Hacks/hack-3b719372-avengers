@@ -1,18 +1,27 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from products import search_products
+from backend.products import search_products
 import requests
-from cart import (
+from backend.cart import (
     get_cart,
     add_to_cart,
     update_cart_quantity,
     remove_from_cart,
     clear_cart
 )
+from pydantic import BaseModel
+from ai.agent import ask_agent
+from backend.ekt_api import get_products, get_product_detail
 
 
-from ekt_api import get_products, get_product_detail
+class ChatMessage(BaseModel):
+    role: str
+    content: str
 
+
+class ChatRequest(BaseModel):
+    message: str
+    history: list = []
 
 app = FastAPI(
     title="EKT AI Assistant API",
@@ -140,18 +149,28 @@ def cart_update(product_id: int, quantity: int):
             detail=f"EKT API error: {str(error)}"
         )
 
-
-@app.delete("/api/cart/{product_id}")
-def cart_remove(product_id: int):
-    try:
-        return remove_from_cart(product_id)
-
-    except ValueError as error:
-        raise HTTPException(
-            status_code=404,
-            detail=str(error)
-        )
-
 @app.delete("/api/cart")
 def cart_clear():
     return clear_cart()
+
+
+@app.post("/api/chat")
+def chat(request: ChatRequest):
+    try:
+        history = request.history.copy()
+
+        answer = ask_agent(
+            message=request.message,
+            history=history
+        )
+
+        return {
+            "answer": answer,
+            "history": history
+        }
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"AI error: {str(error)}"
+        )

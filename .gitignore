@@ -12,3 +12,9 @@ ai/.env
 
 # VS Code
 .vscode/
+
+.env
+**/.env
+venv/
+**/venv/
+__pycache__/

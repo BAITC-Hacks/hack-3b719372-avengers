@@ -1,4 +1,4 @@
-from ekt_api import get_product_detail
+from backend.ekt_api import get_product_detail
 
 cart = {}
 

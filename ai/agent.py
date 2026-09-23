@@ -4,8 +4,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 from openai import OpenAI
 
-from prompts import SYSTEM_PROMPT
-from tools import search_products
+from ai.prompts import SYSTEM_PROMPT
+from ai.tools import search_products
 
 
 load_dotenv(Path(__file__).parent / ".env")

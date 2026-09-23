@@ -1,9 +1,10 @@
 import os
+from pathlib import Path
 
 import requests
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(Path(__file__).parent / ".env")
 
 BASE_URL = os.getenv("EKT_API_URL")
 USERNAME = os.getenv("EKT_API_USERNAME")

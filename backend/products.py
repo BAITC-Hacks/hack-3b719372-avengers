@@ -1,11 +1,7 @@
-from ekt_api import get_products
+from backend.ekt_api import get_products
 
 
 def extract_products(response):
-    """
-    Достаёт список товаров из ответа EKT API.
-    """
-
     if isinstance(response, list):
         return response
 
@@ -19,17 +15,19 @@ def extract_products(response):
     return []
 
 
-def search_products(query: str, max_pages: int = 5):
+def search_products(query: str, max_pages: int = 10):
     query = query.strip().lower()
 
     if not query:
         return []
 
+    # Разбиваем запрос на отдельные слова
+    query_words = query.split()
+
     results = []
 
     for page in range(1, max_pages + 1):
         response = get_products(page)
-
         products = extract_products(response)
 
         if not products:
@@ -38,18 +36,32 @@ def search_products(query: str, max_pages: int = 5):
         for product in products:
             name = str(product.get("name", "")).lower()
             article = str(product.get("article", "")).lower()
-            description = str(product.get("description", "")).lower()
 
-            searchable_text = f"{name} {article} {description}"
+            searchable_text = f"{name} {article}"
 
-            if query in searchable_text:
-                results.append(product)
+            # Считаем количество совпавших слов
+            score = sum(
+                1 for word in query_words
+                if word in searchable_text
+            )
 
-        if len(results) >= 20:
-            break
+            if score > 0:
+                product_copy = product.copy()
+                product_copy["_search_score"] = score
+
+                results.append(product_copy)
+
+    # Сначала товары с большим количеством совпадений
+    results.sort(
+        key=lambda product: product["_search_score"],
+        reverse=True
+    )
+
+    # Убираем техническое поле
+    for product in results:
+        product.pop("_search_score", None)
 
     return results[:20]
-
 
 def normalize_product(product: dict):
     properties = product.get("properties") or {}

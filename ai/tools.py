@@ -1,3 +1,6 @@
+from backend.products import search_products as backend_search_products
+
+
 # Временные данные только для тестирования.
 # Это НЕ реальные товары каталога ekt.kz.
 
@@ -23,11 +26,5 @@ TEST_PRODUCTS = [
 ]
 
 
-def search_products(query: str) -> list[dict]:
-    """Временный поиск для проверки работы AI-агента."""
-    query = query.lower()
-
-    if "автомат" in query or "выключатель" in query:
-        return TEST_PRODUCTS
-
-    return []
+def search_products(query: str):
+    return backend_search_products(query)
