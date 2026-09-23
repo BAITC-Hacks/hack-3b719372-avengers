@@ -1,3 +1,14 @@
+# Python
 .venv/
-ai/.env
+venv/
+**/venv/
 __pycache__/
+*.pyc
+
+# Secrets
+.env
+**/.env
+ai/.env
+
+# VS Code
+.vscode/
