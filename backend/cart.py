@@ -77,7 +77,6 @@ def update_cart_quantity(product_id: int, quantity: int):
     if quantity < 0:
         raise ValueError("Количество не может быть отрицательным")
 
-    # 0 = удалить товар
     if quantity == 0:
         del cart[product_id]
         return get_cart()
