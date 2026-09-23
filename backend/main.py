@@ -1,4 +1,6 @@
 from fastapi import FastAPI, HTTPException
+import logging
+from openai import APIConnectionError, APIStatusError, APITimeoutError, RateLimitError
 from fastapi.middleware.cors import CORSMiddleware
 from backend.products import search_products
 import requests
@@ -12,6 +14,8 @@ from backend.cart import (
 from pydantic import BaseModel
 from ai.agent import ask_agent
 from backend.ekt_api import get_products, get_product_detail
+
+logger = logging.getLogger(__name__)
 
 
 class ChatMessage(BaseModel):
@@ -169,8 +173,16 @@ def chat(request: ChatRequest):
             "history": history
         }
 
+    except (APITimeoutError, requests.Timeout) as error:
+        raise HTTPException(status_code=504, detail="Сервис AI или каталог не ответил вовремя. Повторите запрос.") from error
+    except RateLimitError as error:
+        raise HTTPException(status_code=503, detail="Сервис AI временно недоступен из-за лимита запросов или квоты. Попробуйте позже.") from error
+    except (APIConnectionError, APIStatusError, requests.RequestException) as error:
+        logger.warning("Chat dependency failed: %s", type(error).__name__)
+        raise HTTPException(status_code=502, detail="Не удалось получить ответ от AI или каталога. Попробуйте позже.") from error
     except Exception as error:
+        logger.exception("Unexpected chat failure")
         raise HTTPException(
             status_code=500,
-            detail=f"AI error: {str(error)}"
+            detail="Внутренняя ошибка чата. Повторите запрос; если ошибка сохраняется, обратитесь к администратору."
         )

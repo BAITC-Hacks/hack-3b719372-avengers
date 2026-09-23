@@ -1,0 +1,33 @@
+<<<<<<< HEAD
+# Python
+.venv/
+venv/
+**/venv/
+__pycache__/
+*.pyc
+
+# Secrets
+.env
+**/.env
+ai/.env
+
+# VS Code
+.vscode/
+
+.env
+**/.env
+venv/
+**/venv/
+__pycache__/
+=======
+node_modules/
+dist/
+dist-widget/
+.env
+.env.local
+.DS_Store
+.venv/
+venv/
+__pycache__/
+*.pyc
+>>>>>>> origin/frontend

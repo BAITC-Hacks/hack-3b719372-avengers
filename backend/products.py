@@ -1,4 +1,30 @@
 from backend.ekt_api import get_products
+from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
+from time import monotonic
+
+
+_catalog_cache = {}
+_catalog_lock = Lock()
+CATALOG_TTL = 60
+
+
+def load_catalog(max_pages):
+    # One refresh at a time; failed refreshes never replace the cache.
+    with _catalog_lock:
+        cached = _catalog_cache.get(max_pages)
+        if cached and monotonic() - cached[0] < CATALOG_TTL:
+            return cached[1]
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            pages = list(pool.map(get_products, range(1, max_pages + 1)))
+        products = []
+        for page in pages:
+            batch = extract_products(page)
+            if not batch:
+                break
+            products.extend(batch)
+        _catalog_cache[max_pages] = (monotonic(), products)
+        return products
 
 
 def extract_products(response):
@@ -26,30 +52,23 @@ def search_products(query: str, max_pages: int = 10):
 
     results = []
 
-    for page in range(1, max_pages + 1):
-        response = get_products(page)
-        products = extract_products(response)
+    for product in load_catalog(max_pages):
+        name = str(product.get("name", "")).lower()
+        article = str(product.get("article", "")).lower()
 
-        if not products:
-            break
+        searchable_text = f"{name} {article}"
 
-        for product in products:
-            name = str(product.get("name", "")).lower()
-            article = str(product.get("article", "")).lower()
+        # Считаем количество совпавших слов
+        score = sum(
+            1 for word in query_words
+            if word in searchable_text
+        )
 
-            searchable_text = f"{name} {article}"
+        if score > 0:
+            product_copy = product.copy()
+            product_copy["_search_score"] = score
 
-            # Считаем количество совпавших слов
-            score = sum(
-                1 for word in query_words
-                if word in searchable_text
-            )
-
-            if score > 0:
-                product_copy = product.copy()
-                product_copy["_search_score"] = score
-
-                results.append(product_copy)
+            results.append(product_copy)
 
     # Сначала товары с большим количеством совпадений
     results.sort(

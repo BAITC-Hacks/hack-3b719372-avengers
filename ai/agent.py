@@ -10,7 +10,7 @@ from ai.tools import search_products
 
 load_dotenv(Path(__file__).parent / ".env")
 
-client = OpenAI()
+client = OpenAI(timeout=20.0, max_retries=0)
 
 TOOLS = [
     {
@@ -18,8 +18,7 @@ TOOLS = [
         "name": "search_products",
         "description": (
             "Ищет товары по запросу покупателя. "
-            "Сейчас возвращает только демонстрационные данные, "
-            "а не реальный каталог ekt.kz."
+            "Возвращает товары реального каталога ekt.kz."
         ),
         "parameters": {
             "type": "object",

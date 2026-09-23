@@ -16,7 +16,7 @@ def get_products(page: int = 1):
         f"{BASE_URL}/products",
         params={"page": page},
         auth=(USERNAME, PASSWORD),
-        timeout=20,
+        timeout=(3, 8),
     )
 
     response.raise_for_status()
@@ -29,7 +29,7 @@ def get_product_detail(product_id: int):
         f"{BASE_URL}/products/detail",
         params={"id": product_id},
         auth=(USERNAME, PASSWORD),
-        timeout=20,
+        timeout=(3, 8),
     )
 
     response.raise_for_status()
